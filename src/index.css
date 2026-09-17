@@ -1,0 +1,219 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #f4b942;
+  --accent-rgb: 244, 185, 66;
+  --accent-dark: #b7791f;
+  --cream: #f5f0e1;
+  --cream-rgb: 245, 240, 225;
+  --ink: #0c0a08;
+  --ink-rgb: 12, 10, 8;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: #0c0a08;
+  overflow-x: hidden;
+}
+
+/* Broadcast gradient text */
+.text-gradient {
+  background: linear-gradient(135deg, #f5f0e1 0%, var(--accent) 50%, #f5f0e1 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #fef3c7 0%, #f59e0b 50%, #fef3c7 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+
+/* Glass panel */
+.glass-panel {
+  background: linear-gradient(135deg, rgba(20, 17, 14, 0.85) 0%, rgba(8, 6, 5, 0.92) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(244, 185, 66, 0.12);
+}
+
+/* Glow ring */
+.glow-ring {
+  box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.3), 0 0 40px rgba(var(--accent-rgb), 0.15), inset 0 0 20px rgba(var(--accent-rgb), 0.05);
+}
+
+.glow-ring-strong {
+  box-shadow: 0 0 30px rgba(var(--accent-rgb), 0.5), 0 0 60px rgba(var(--accent-rgb), 0.25), inset 0 0 30px rgba(var(--accent-rgb), 0.1);
+}
+
+.glow-gold {
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.5), 0 0 60px rgba(245, 158, 11, 0.25), inset 0 0 30px rgba(245, 158, 11, 0.1);
+}
+
+/* Broadcast button shine */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  transition: left 0.6s ease;
+}
+.btn-shine:hover::before {
+  left: 120%;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(12, 10, 8, 0.4);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-rgb), 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--accent-rgb), 0.7);
+}
+
+/* Ambient background grid */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(var(--accent-rgb), 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.055) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Radial spotlight */
+.bg-spotlight {
+  background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(var(--accent-rgb), 0.12), transparent 70%);
+}
+
+/* Connector lines for bracket */
+.bracket-connector {
+  position: absolute;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.3), rgba(var(--accent-rgb), 0.6));
+  pointer-events: none;
+}
+
+.bracket-connector-active {
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.6), rgba(var(--accent-rgb), 1));
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
+}
+
+/* Shake animation */
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
+/* Page transition */
+.page-enter {
+  animation: page-enter 0.4s ease-out both;
+}
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(12px) scale(0.99); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+/* Ripple */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(0);
+  animation: ripple-expand 0.6s ease-out;
+  pointer-events: none;
+}
+@keyframes ripple-expand {
+  to { transform: scale(4); opacity: 0; }
+}
+
+/* Light beam sweep */
+.light-beam {
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.15), transparent);
+  pointer-events: none;
+}
+
+/* Bracket connector line */
+.bracket-line {
+  position: absolute;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.15), rgba(var(--accent-rgb), 0.3));
+  pointer-events: none;
+}
+.bracket-line-active {
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.5), rgba(var(--accent-rgb), 0.8));
+  box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.4);
+}
+.bracket-line-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 40%, rgba(255,255,255,0.4) 50%, transparent 60%);
+  background-size: 200% 100%;
+  animation: connector-flow 2s linear infinite;
+}
+
+/* Winner burst ring */
+.winner-burst-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid rgba(16, 185, 129, 0.6);
+  pointer-events: none;
+}
+
+/* Progress bar shine */
+.progress-shine {
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  animation: progress-shine 2s ease-in-out infinite;
+}
+
+/* 3D perspective for card flip */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+}
