@@ -25,7 +25,7 @@ export function AdminPanel() {
     tournament, teams, loading,
     setTeamCount, setTournamentName,
     addTeam, updateTeam, deleteTeam, clearAllTeams,
-    uploadLogo, resetTournament,
+    resetTournament,
   } = useTournamentContext();
 
   const [editingTeam, setEditingTeam] = useState<Team | null | undefined>(undefined);
@@ -256,7 +256,6 @@ export function AdminPanel() {
               <TeamForm
                 team={editingTeam}
                 onSubmit={handleSubmit}
-                onUploadLogo={uploadLogo}
                 onCancel={() => setEditingTeam(undefined)}
               />
             </div>

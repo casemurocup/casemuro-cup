@@ -1,36 +1,38 @@
-import { useRef, useState, type FormEvent } from 'react';
-import { Upload, X } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Link2, X } from 'lucide-react';
 import { TeamLogo } from '@/components/UI/TeamLogo';
+import { showToast } from '@/components/UI/Toast';
+import { isSafeUrl } from '@/lib/incidents';
 import type { Team } from '@/types/tournament';
 
 interface TeamFormProps {
   team: Team | null;
   onSubmit: (name: string, logoUrl: string | null) => Promise<boolean>;
-  onUploadLogo: (file: File) => Promise<string | null>;
   onCancel: () => void;
 }
 
-export function TeamForm({ team, onSubmit, onUploadLogo, onCancel }: TeamFormProps) {
+export function TeamForm({ team, onSubmit, onCancel }: TeamFormProps) {
   const [name, setName] = useState(team?.name ?? '');
-  const [logoUrl, setLogoUrl] = useState<string | null>(team?.logo_url ?? null);
+  const [logoUrl, setLogoUrl] = useState(team?.logo_url ?? '');
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const url = await onUploadLogo(file);
-    setUploading(false);
-    if (url) setLogoUrl(url);
-  };
+  const cleanLogoUrl = logoUrl.trim();
+
+  /* Solo se previsualiza cuando el enlace es válido, para no dejar una imagen
+     rota mientras se está escribiendo. */
+  const previewUrl = cleanLogoUrl && isSafeUrl(cleanLogoUrl) ? cleanLogoUrl : null;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    if (cleanLogoUrl && !isSafeUrl(cleanLogoUrl)) {
+      showToast('El enlace del escudo debe empezar por http:// o https://', 'error');
+      return;
+    }
+
     setSaving(true);
-    const ok = await onSubmit(name, logoUrl);
+    const ok = await onSubmit(name, cleanLogoUrl || null);
     setSaving(false);
     if (ok) onCancel();
   };
@@ -39,36 +41,38 @@ export function TeamForm({ team, onSubmit, onUploadLogo, onCancel }: TeamFormPro
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="flex flex-col items-center gap-4">
         <div className="relative">
-          <TeamLogo logoUrl={logoUrl} name={name || 'Equipo'} size="2xl" glow={!!logoUrl} />
-          {logoUrl && <div className="absolute inset-0 rounded-full bg-accent-500/15 blur-xl" />}
+          <TeamLogo logoUrl={previewUrl} name={name || 'Equipo'} size="2xl" glow={!!previewUrl} />
+          {previewUrl && <div className="absolute inset-0 rounded-full bg-accent-500/15 blur-xl" />}
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-300">
+          <Link2 className="h-4 w-4 text-accent-400" /> Enlace del escudo
+        </label>
         <div className="flex gap-2">
           <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFile}
-            className="hidden"
+            type="url"
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://.../escudo.png"
+            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20"
           />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="btn-shine flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-50"
-          >
-            <Upload className="h-4 w-4" />
-            {uploading ? 'Subiendo...' : 'Subir Escudo'}
-          </button>
-          {logoUrl && (
+          {cleanLogoUrl && (
             <button
               type="button"
-              onClick={() => setLogoUrl(null)}
+              onClick={() => setLogoUrl('')}
+              title="Quitar escudo"
               className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 transition hover:border-red-500/50 hover:text-red-400"
             >
-              <X className="h-4 w-4" /> Quitar
+              <X className="h-4 w-4" />
             </button>
           )}
         </div>
+        <p className="mt-1.5 text-xs text-slate-500">
+          Pega la dirección de una imagen alojada en otro sitio. No se sube nada
+          a la web, así que no consume espacio.
+        </p>
       </div>
 
       <div>

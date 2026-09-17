@@ -243,21 +243,6 @@ export function useTournament() {
     }
   }, [data.tournament, loadAll]);
 
-  const uploadLogo = useCallback(async (file: File): Promise<string | null> => {
-    if (!data.tournament) return null;
-    try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-      const path = `${data.tournament.id}/${crypto.randomUUID()}-${safeName}`;
-      const { error: uploadError } = await supabase.storage.from('team-logos').upload(path, file, { upsert: false });
-      if (uploadError) throw uploadError;
-      const { data: publicUrl } = supabase.storage.from('team-logos').getPublicUrl(path);
-      return publicUrl.publicUrl;
-    } catch (err) {
-      setData((prev) => ({ ...prev, error: friendlyError(err) }));
-      return null;
-    }
-  }, [data.tournament]);
-
   const addTeam = useCallback(async (name: string, logoUrl: string | null) => {
     if (!data.tournament) return false;
     if (data.teams.length >= data.tournament.team_count) {
@@ -479,7 +464,6 @@ export function useTournament() {
     clearError,
     setTeamCount,
     setTournamentName,
-    uploadLogo,
     addTeam,
     updateTeam,
     deleteTeam,

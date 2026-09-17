@@ -3,9 +3,7 @@ import {
   Settings,
   LayoutGrid,
   Dices,
-  Monitor,
   Maximize2,
-  Radio,
   ScrollText,
   LogOut,
   UserCog,
@@ -32,12 +30,9 @@ export function NavBar({
   onLogout,
 }: NavBarProps) {
   const {
-    presentation,
     fullscreen,
     live,
-    togglePresentation,
     toggleFullscreen,
-    toggleLive,
   } = usePresentation();
 
   const { unreadCount } = useChatNotifications();
@@ -171,30 +166,6 @@ export function NavBar({
 
         {/* ACTIONS */}
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={toggleLive}
-            title="Modo EN DIRECTO"
-            className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-all ${
-              live
-                ? 'border-red-500/50 bg-red-500/15 text-red-400 shadow-lg shadow-red-500/20'
-                : 'border-slate-800 bg-slate-900/60 text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <Radio className="h-4 w-4" />
-          </button>
-
-          <button
-            onClick={togglePresentation}
-            title="Modo Presentación"
-            className={`hidden h-9 w-9 items-center justify-center rounded-lg border transition-all sm:flex ${
-              presentation
-                ? 'border-accent-500/50 bg-accent-500/15 text-accent-400 shadow-lg shadow-accent-500/20'
-                : 'border-slate-800 bg-slate-900/60 text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <Monitor className="h-4 w-4" />
-          </button>
-
           <button
             onClick={toggleFullscreen}
             title="Pantalla Completa"
