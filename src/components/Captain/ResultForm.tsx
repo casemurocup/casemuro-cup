@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Plus, X, ClipboardList, CheckCircle2 } from 'lucide-react';
+import { Plus, X, ClipboardList, CheckCircle2, Link2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { showToast } from '@/components/UI/Toast';
 import { TeamLogo } from '@/components/UI/TeamLogo';
+import { isSafeUrl } from '@/lib/incidents';
 import type { Match, Team, MatchResult, Scorer } from '@/types/tournament';
 
 interface ResultFormProps {
@@ -23,6 +24,7 @@ export function ResultForm({ match, myTeam, rivalTeam, captainId, existingResult
   const [penaltyTeam2, setPenaltyTeam2] = useState(existingResult?.penalty_team2 ?? 0);
   const [scorers, setScorers] = useState<Scorer[]>(existingResult?.scorers ?? []);
   const [notes, setNotes] = useState(existingResult?.notes ?? '');
+  const [evidenceUrl, setEvidenceUrl] = useState(existingResult?.evidence_url ?? '');
   const [submitting, setSubmitting] = useState(false);
 
   const winnerId = team1Score > team2Score ? match.team1_id : team2Score > team1Score ? match.team2_id : null;
@@ -36,6 +38,13 @@ export function ResultForm({ match, myTeam, rivalTeam, captainId, existingResult
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!rivalTeam) return;
+
+    const cleanEvidenceUrl = evidenceUrl.trim();
+    if (cleanEvidenceUrl && !isSafeUrl(cleanEvidenceUrl)) {
+      showToast('El enlace debe empezar por http:// o https://', 'error');
+      return;
+    }
+
     setSubmitting(true);
 
     const payload = {
@@ -50,6 +59,7 @@ export function ResultForm({ match, myTeam, rivalTeam, captainId, existingResult
       penalty_team2: hadPenalties ? penaltyTeam2 : null,
       scorers: scorers.filter((s) => s.player.trim()),
       notes: notes.trim() || null,
+      evidence_url: cleanEvidenceUrl || null,
       status: 'pending_review',
     };
 
@@ -193,6 +203,23 @@ export function ResultForm({ match, myTeam, rivalTeam, captainId, existingResult
           ))}
           {scorers.length === 0 && <p className="text-xs text-slate-600">Sin goleadores registrados.</p>}
         </div>
+      </div>
+
+      {/* Evidence link */}
+      <div>
+        <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-300">
+          <Link2 className="h-4 w-4 text-sky-400" /> Enlace de prueba (opcional)
+        </label>
+        <input
+          type="url"
+          value={evidenceUrl}
+          onChange={(e) => setEvidenceUrl(e.target.value)}
+          placeholder="https://... (clip o captura del resultado)"
+          className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-sky-500/50"
+        />
+        <p className="mt-1.5 text-xs text-slate-500">
+          Sube la captura donde quieras (Imgur, Streamable, Drive...) y pega aquí el enlace.
+        </p>
       </div>
 
       {/* Notes */}

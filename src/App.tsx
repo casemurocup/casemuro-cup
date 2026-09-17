@@ -23,6 +23,7 @@ import { AdminPanel } from '@/components/Admin/AdminPanel';
 import { Bracket } from '@/components/Bracket/Bracket';
 import { TeamRoulette } from '@/components/Bracket/TeamRoulette';
 import { RulesPage } from '@/components/Rules/RulesPage';
+import { IncidentsPage } from '@/components/Incidents/IncidentsPage';
 
 import { CaptainAuthPage } from '@/components/Captain/CaptainAuthPage';
 import { CaptainPanel } from '@/components/Captain/CaptainPanel';
@@ -339,6 +340,15 @@ function AppContent() {
             <Bracket
               onNavigate={handleNavigate}
               isAdmin={isAdmin}
+            />
+          </div>
+        )}
+
+        {/* INCIDENCIAS */}
+        {view === 'incidents' && (
+          <div className="page-enter">
+            <IncidentsPage
+              onNavigate={handleNavigate}
             />
           </div>
         )}

@@ -106,7 +106,38 @@ export interface MatchResult {
   penalty_team2: number | null;
   scorers: Scorer[];
   notes: string | null;
+  evidence_url: string | null;
   status: MatchResultStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export type IncidentCategory =
+  | 'rival'
+  | 'horario'
+  | 'tecnico'
+  | 'resultado'
+  | 'otro';
+
+export type IncidentStatus =
+  | 'open'
+  | 'reviewing'
+  | 'resolved'
+  | 'dismissed';
+
+export interface Incident {
+  id: string;
+  captain_id: string;
+  team_id: string | null;
+  match_id: string | null;
+  category: IncidentCategory;
+  subject: string;
+  description: string;
+  evidence_url: string | null;
+  status: IncidentStatus;
+  resolution_notes: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -132,6 +163,7 @@ export type View =
   | 'draw'
   | 'bracket'
   | 'rules'
+  | 'incidents'
   | 'captain'
   | 'match'
   | 'register-captain';

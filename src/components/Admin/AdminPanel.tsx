@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Trash2, RotateCcw, Users, Sparkles, UserCog } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Users, Sparkles, UserCog, AlertTriangle } from 'lucide-react';
 import { useTournamentContext } from '@/context/TournamentContext';
 import { TeamCard } from '@/components/Teams/TeamCard';
 import { TeamForm } from '@/components/Teams/TeamForm';
@@ -9,6 +9,7 @@ import { StatCard } from '@/components/UI/StatCard';
 import { BroadcastButton } from '@/components/UI/BroadcastButton';
 import { showToast } from '@/components/UI/Toast';
 import { CaptainManagement } from '@/components/Admin/CaptainManagement';
+import { IncidentManagement } from '@/components/Admin/IncidentManagement';
 import type { Team, TeamCount } from '@/types/tournament';
 
 const DEMO_TEAMS = [
@@ -32,7 +33,7 @@ export function AdminPanel() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [addingDemo, setAddingDemo] = useState(false);
-  const [adminTab, setAdminTab] = useState<'teams' | 'captains'>('teams');
+  const [adminTab, setAdminTab] = useState<'teams' | 'captains' | 'incidents'>('teams');
 
   if (loading || !tournament) {
     return <div className="flex h-full items-center justify-center py-20 text-slate-500">Cargando...</div>;
@@ -126,7 +127,17 @@ export function AdminPanel() {
         >
           <UserCog className="h-4 w-4" /> Capitanes
         </button>
+        <button
+          onClick={() => setAdminTab('incidents')}
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-bold uppercase tracking-wide transition ${
+            adminTab === 'incidents' ? 'bg-accent-500/20 text-accent-400' : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <AlertTriangle className="h-4 w-4" /> Incidencias
+        </button>
       </div>
+
+      {adminTab === 'incidents' && <IncidentManagement />}
 
       {adminTab === 'captains' && <CaptainManagement />}
 

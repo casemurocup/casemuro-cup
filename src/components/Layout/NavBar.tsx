@@ -9,6 +9,7 @@ import {
   ScrollText,
   LogOut,
   UserCog,
+  AlertTriangle,
 } from 'lucide-react';
 
 import { usePresentation } from '@/context/PresentationContext';
@@ -78,6 +79,12 @@ export function NavBar({
       view: 'rules',
       label: 'Normas',
       icon: ScrollText,
+    },
+
+    {
+      view: 'incidents',
+      label: 'Incidencias',
+      icon: AlertTriangle,
     },
 
     {
