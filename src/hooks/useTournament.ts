@@ -16,6 +16,28 @@ function friendlyError(err: unknown): string {
   return 'Ha ocurrido un error inesperado.';
 }
 
+/**
+ * Comprueba que una escritura haya afectado de verdad a alguna fila.
+ *
+ * PostgREST devuelve éxito (204) tanto si un UPDATE/DELETE cambia cien filas
+ * como si no cambia ninguna. Cuando RLS filtra la fila porque quien llama no
+ * es administrador, la operación "funciona" pero no hace nada, y la interfaz
+ * acababa diciendo que todo había ido bien sin haber cambiado nada.
+ *
+ * Como estas operaciones se lanzan sobre filas que sabemos que existen, cero
+ * filas afectadas solo puede significar que la base de datos lo ha rechazado.
+ */
+function assertAffected(rows: unknown[] | null, action: string): void {
+  if (rows && rows.length > 0) return;
+
+  throw new Error(
+    `No se ha podido ${action}. Tu sesión ya no tiene permisos de ` +
+      'administración: si has iniciado sesión como capitán en este mismo ' +
+      'navegador, has reemplazado la sesión de administrador. Sal y vuelve ' +
+      'a entrar en Administración.',
+  );
+}
+
 /*
  * Cada pestaña abierta con Realtime ocupa una conexión, y el plan gratuito de
  * Supabase tiene un tope (unas 200 simultáneas). Como los capitanes y la
@@ -220,8 +242,9 @@ export function useTournament() {
       return false;
     }
     try {
-      const { error } = await supabase.from('tournaments').update({ team_count: count }).eq('id', data.tournament.id);
+      const { data: updated, error } = await supabase.from('tournaments').update({ team_count: count }).eq('id', data.tournament.id).select('id');
       if (error) throw error;
+      assertAffected(updated, 'cambiar el número de equipos');
       await loadAll();
       return true;
     } catch (err) {
@@ -247,11 +270,13 @@ export function useTournament() {
       return false;
     }
     try {
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('tournaments')
         .update({ format, team_count: teamCount })
-        .eq('id', data.tournament.id);
+        .eq('id', data.tournament.id)
+        .select('id');
       if (error) throw error;
+      assertAffected(updated, 'cambiar el formato');
       await loadAll();
       return true;
     } catch (err) {
@@ -315,8 +340,9 @@ export function useTournament() {
 
   const updateTeam = useCallback(async (id: string, updates: { name?: string; logo_url?: string | null }) => {
     try {
-      const { error } = await supabase.from('teams').update(updates).eq('id', id);
+      const { data: updated, error } = await supabase.from('teams').update(updates).eq('id', id).select('id');
       if (error) throw error;
+      assertAffected(updated, 'guardar el equipo');
       await loadAll();
       return true;
     } catch (err) {
@@ -332,8 +358,9 @@ export function useTournament() {
       return false;
     }
     try {
-      const { error } = await supabase.from('teams').delete().eq('id', id);
+      const { data: deleted, error } = await supabase.from('teams').delete().eq('id', id).select('id');
       if (error) throw error;
+      assertAffected(deleted, 'eliminar el equipo');
       await loadAll();
       return true;
     } catch (err) {
@@ -491,14 +518,16 @@ export function useTournament() {
       const { error: deleteError } = await supabase.from('matches').delete().eq('tournament_id', data.tournament.id);
       if (deleteError) throw deleteError;
 
-      const { error: updateError } = await supabase
+      const { data: updated, error: updateError } = await supabase
         .from('tournaments')
         .update({
           status: 'setup',
           champion_team_id: null,
         })
-        .eq('id', data.tournament.id);
+        .eq('id', data.tournament.id)
+        .select('id');
       if (updateError) throw updateError;
+      assertAffected(updated, 'reiniciar el torneo');
 
       await loadAll();
       return true;
