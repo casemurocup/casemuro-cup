@@ -2844,6 +2844,23 @@ ALTER TABLE incidents ADD CONSTRAINT incidents_scores_non_negative CHECK (
   AND (score_rival IS NULL OR score_rival >= 0)
 );
 
+-- Incidencias antiguas creadas con la categoría `resultado` cuando todavía
+-- era solo texto: no tienen marcador ni prueba, así que no son reportes de
+-- resultado válidos y la restricción de abajo las rechazaría.
+--
+-- No se borran: se reclasifican como `otro`, que es lo que realmente son.
+-- Se conservan el título, la descripción, el enlace y el estado.
+UPDATE incidents
+   SET category = 'otro'
+ WHERE category = 'resultado'
+   AND (
+     match_id IS NULL
+     OR evidence_url IS NULL
+     OR btrim(evidence_url) = ''
+     OR score_own IS NULL
+     OR score_rival IS NULL
+   );
+
 -- Un reporte de resultado sin partido, marcador o prueba no sirve de nada.
 ALTER TABLE incidents DROP CONSTRAINT IF EXISTS incidents_result_requires_data;
 ALTER TABLE incidents ADD CONSTRAINT incidents_result_requires_data CHECK (
