@@ -1,0 +1,21 @@
+{
+  // Despliegue en Cloudflare Workers como sitio estático (Static Assets).
+  //
+  // Sin este archivo, `wrangler deploy` detecta "Framework: Vite" e intenta
+  // autoconfigurarse con el plugin de Cloudflare para Vite, que exige Vite 6+
+  // y falla con:
+  //   "The version of Vite used in the project ("5.4.x") cannot be
+  //    automatically configured."
+  //
+  // Aquí no hace falta ese plugin: la aplicación es una SPA que se compila a
+  // `dist/` y se sirve tal cual, sin Worker por delante.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "casemuro-cup",
+  "compatibility_date": "2026-09-17",
+  "assets": {
+    "directory": "./dist",
+    // Cualquier ruta que no exista como archivo devuelve index.html, que es
+    // lo que necesita una SPA. Equivale al `public/_redirects` de Pages.
+    "not_found_handling": "single-page-application"
+  }
+}
