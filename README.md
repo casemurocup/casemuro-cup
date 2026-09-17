@@ -107,7 +107,31 @@ En ambos casos hay que configurar `VITE_SUPABASE_URL`,
 `VITE_SUPABASE_ANON_KEY` y `VITE_ADMIN_EMAIL`, y **volver a desplegar** después
 de añadirlas (Vite las incrusta en tiempo de build).
 
-## 6. Estructura
+## 6. Consumo del plan gratuito de Supabase
+
+El límite que antes se podía tocar en un torneo con mucha audiencia era el de
+**conexiones simultáneas de Realtime** (unas 200 en el plan Free), porque cada
+pestaña abierta ocupaba una.
+
+Cómo está resuelto en `src/hooks/useTournament.ts`:
+
+- **Capitanes y organización** (con sesión iniciada) usan **Realtime**: ven los
+  cambios al instante, igual que siempre.
+- **Visitantes** (sin sesión) consultan cada `POLL_INTERVAL_MS` (15 s) una
+  firma diminuta —la marca de tiempo más reciente y el número de filas de
+  `tournaments`, `teams` y `matches`, unos pocos bytes— y solo recargan el
+  torneo completo cuando esa firma cambia. Con la pestaña en segundo plano no
+  consultan nada.
+
+Para que la detección sea exacta, la migración
+`20260917110000_add_change_tracking.sql` añade triggers que actualizan
+`updated_at` en cada escritura.
+
+Si algún día quieres más inmediatez para los visitantes, baja
+`POLL_INTERVAL_MS`; si quieres gastar menos transferencia, súbelo. El panel
+*Usage* de Supabase te dice cuánto estás consumiendo de cada límite.
+
+## 7. Estructura
 
 ```
 src/

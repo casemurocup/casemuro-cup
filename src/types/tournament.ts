@@ -25,6 +25,7 @@ export interface Team {
   name: string;
   logo_url: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 export type MatchState =

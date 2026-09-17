@@ -16,6 +16,55 @@ function friendlyError(err: unknown): string {
   return 'Ha ocurrido un error inesperado.';
 }
 
+/*
+ * Cada pestaña abierta con Realtime ocupa una conexión, y el plan gratuito de
+ * Supabase tiene un tope (unas 200 simultáneas). Como los capitanes y la
+ * organización son pocos pero los visitantes pueden ser muchos, solo quienes
+ * tienen sesión iniciada usan Realtime.
+ *
+ * El resto pregunta cada pocos segundos si algo ha cambiado. Para no gastar
+ * transferencia, esa pregunta NO se trae el torneo entero: pide solo la marca
+ * de tiempo más reciente y el número de filas de cada tabla (unos pocos
+ * bytes), y únicamente cuando esa firma cambia se hace la recarga completa.
+ */
+const POLL_INTERVAL_MS = 15000;
+
+async function fetchChangeSignature(tournamentId: string): Promise<string | null> {
+  try {
+    const [tournamentRes, teamsRes, matchesRes] = await Promise.all([
+      supabase
+        .from('tournaments')
+        .select('updated_at')
+        .eq('id', tournamentId)
+        .maybeSingle(),
+      supabase
+        .from('teams')
+        .select('updated_at', { count: 'exact' })
+        .eq('tournament_id', tournamentId)
+        .order('updated_at', { ascending: false })
+        .limit(1),
+      supabase
+        .from('matches')
+        .select('updated_at', { count: 'exact' })
+        .eq('tournament_id', tournamentId)
+        .order('updated_at', { ascending: false })
+        .limit(1),
+    ]);
+
+    if (tournamentRes.error || teamsRes.error || matchesRes.error) return null;
+
+    return [
+      tournamentRes.data?.updated_at ?? '',
+      teamsRes.count ?? 0,
+      teamsRes.data?.[0]?.updated_at ?? '',
+      matchesRes.count ?? 0,
+      matchesRes.data?.[0]?.updated_at ?? '',
+    ].join('|');
+  } catch {
+    return null;
+  }
+}
+
 export function useTournament() {
   const [data, setData] = useState<TournamentData>({
     tournament: null,
@@ -69,9 +118,36 @@ export function useTournament() {
     loadAll();
   }, [loadAll]);
 
+  /*
+   * ¿Hay sesión iniciada? (capitán o administración)
+   */
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) setHasSession(!!session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) setHasSession(!!session);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  /*
+   * Realtime: solo para quien tiene sesión.
+   */
   useEffect(() => {
     const tournamentId = data.tournament?.id;
-    if (!tournamentId) return;
+    if (!tournamentId || !hasSession) return;
 
     const channel = supabase
       .channel(`tournament-${tournamentId}`)
@@ -85,7 +161,49 @@ export function useTournament() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [data.tournament?.id, loadAll]);
+  }, [data.tournament?.id, hasSession, loadAll]);
+
+  /*
+   * Visitantes sin sesión: sondeo ligero en lugar de Realtime.
+   *
+   * No consulta nada mientras la pestaña está en segundo plano, y vuelve a
+   * comprobar en cuanto el visitante la recupera.
+   */
+  useEffect(() => {
+    const tournamentId = data.tournament?.id;
+    if (!tournamentId || hasSession) return;
+
+    let cancelled = false;
+    let lastSignature: string | null = null;
+
+    const check = async () => {
+      if (cancelled || document.hidden) return;
+
+      const signature = await fetchChangeSignature(tournamentId);
+      if (cancelled || !signature) return;
+
+      if (lastSignature !== null && signature !== lastSignature) {
+        loadAll();
+      }
+
+      lastSignature = signature;
+    };
+
+    check();
+
+    const intervalId = window.setInterval(check, POLL_INTERVAL_MS);
+    const handleVisibility = () => {
+      if (!document.hidden) check();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [data.tournament?.id, hasSession, loadAll]);
 
   const clearError = useCallback(() => {
     setData((prev) => ({ ...prev, error: null }));
