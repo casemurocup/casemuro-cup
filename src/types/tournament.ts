@@ -134,6 +134,8 @@ export interface Incident {
   subject: string;
   description: string;
   evidence_url: string | null;
+  score_own: number | null;
+  score_rival: number | null;
   status: IncidentStatus;
   resolution_notes: string | null;
   resolved_by: string | null;

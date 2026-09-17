@@ -87,6 +87,14 @@ export function IncidentsPage({
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [scoreOwn, setScoreOwn] = useState(0);
+  const [scoreRival, setScoreRival] = useState(0);
+
+  /**
+   * En modo resultado el formulario cambia: hay que elegir partido, poner el
+   * marcador y adjuntar prueba obligatoriamente.
+   */
+  const isResult = category === 'resultado';
 
   const isApproved =
     !!captain && captain.status === 'approved';
@@ -145,6 +153,16 @@ export function IncidentsPage({
     };
   }, [isApproved, load]);
 
+  const rivalTeamFor = (id: string) => {
+    const match = matches.find((m) => m.id === id);
+    if (!match) return null;
+
+    const rivalId =
+      match.team1_id === myTeam?.id ? match.team2_id : match.team1_id;
+
+    return teams.find((t) => t.id === rivalId) ?? null;
+  };
+
   const matchLabel = (id: string) => {
     const match = matches.find((m) => m.id === id);
     if (!match) return 'Partido';
@@ -164,17 +182,36 @@ export function IncidentsPage({
     event.preventDefault();
     if (!captain || submitting) return;
 
-    const cleanSubject = subject.trim();
     const cleanDescription = description.trim();
     const cleanUrl = evidenceUrl.trim();
 
-    if (!cleanSubject) {
+    const rival = matchId ? rivalTeamFor(matchId) : null;
+
+    /*
+     * En un reporte de resultado el título se genera solo con el marcador:
+     * pedirle además un titular al capitán sería ruido.
+     */
+    const cleanSubject = isResult
+      ? `Resultado: ${myTeam?.name ?? 'Mi equipo'} ${scoreOwn} - ${scoreRival} ${rival?.name ?? 'Rival'}`
+      : subject.trim();
+
+    if (isResult && !matchId) {
+      showToast('Elige de qué partido es el resultado', 'error');
+      return;
+    }
+
+    if (!isResult && !cleanSubject) {
       showToast('Ponle un título a la incidencia', 'error');
       return;
     }
 
-    if (!cleanDescription) {
+    if (!isResult && !cleanDescription) {
       showToast('Explica qué ha pasado', 'error');
+      return;
+    }
+
+    if (isResult && !cleanUrl) {
+      showToast('Para reportar un resultado tienes que adjuntar una prueba', 'error');
       return;
     }
 
@@ -193,6 +230,8 @@ export function IncidentsPage({
       subject: cleanSubject,
       description: cleanDescription,
       evidence_url: cleanUrl || null,
+      score_own: isResult ? scoreOwn : null,
+      score_rival: isResult ? scoreRival : null,
     });
 
     setSubmitting(false);
@@ -202,11 +241,17 @@ export function IncidentsPage({
       return;
     }
 
-    showToast('Incidencia enviada a la organización');
+    showToast(
+      isResult
+        ? 'Resultado enviado a la organización'
+        : 'Incidencia enviada a la organización',
+    );
     setSubject('');
     setDescription('');
     setEvidenceUrl('');
     setMatchId('');
+    setScoreOwn(0);
+    setScoreRival(0);
     setCategory('rival');
     load();
   };
@@ -262,7 +307,7 @@ export function IncidentsPage({
           <AlertTriangle className="h-5 w-5 text-accent-400" />
 
           <h2 className="font-display text-xl font-bold uppercase tracking-wide text-slate-100">
-            Nueva incidencia
+            {isResult ? 'Reportar resultado' : 'Nueva incidencia'}
           </h2>
         </div>
 
@@ -288,7 +333,9 @@ export function IncidentsPage({
         {myMatches.length > 0 && (
           <div>
             <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">
-              Partido relacionado (opcional)
+              {isResult
+                ? 'Partido jugado'
+                : 'Partido relacionado (opcional)'}
             </label>
 
             <select
@@ -296,7 +343,9 @@ export function IncidentsPage({
               onChange={(e) => setMatchId(e.target.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-accent-500/50 focus:ring-2 focus:ring-accent-500/30"
             >
-              <option value="">Ninguno en concreto</option>
+              <option value="">
+                {isResult ? 'Elige el partido' : 'Ninguno en concreto'}
+              </option>
 
               {myMatches.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -307,34 +356,89 @@ export function IncidentsPage({
           </div>
         )}
 
-        {/* ASUNTO */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">
-            Título
-          </label>
+        {/* MARCADOR (solo en modo resultado) */}
+        {isResult && (
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">
+              Marcador final
+            </label>
 
-          <input
-            type="text"
-            value={subject}
-            maxLength={120}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="Resume el problema en una línea"
-            className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-accent-500/50 focus:ring-2 focus:ring-accent-500/30"
-          />
-        </div>
+            <div className="flex items-center justify-center gap-5 rounded-lg border border-slate-800 bg-slate-950/40 py-5">
+              <div className="flex flex-col items-center gap-2">
+                <span className="max-w-[9rem] truncate text-xs font-bold uppercase tracking-wide text-slate-300">
+                  {myTeam?.name ?? 'Tu equipo'}
+                </span>
+
+                <input
+                  type="number"
+                  min={0}
+                  value={scoreOwn}
+                  onChange={(e) =>
+                    setScoreOwn(Math.max(0, parseInt(e.target.value) || 0))
+                  }
+                  className="w-16 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-center text-2xl font-bold text-slate-100 outline-none transition focus:border-accent-500/50"
+                />
+              </div>
+
+              <span className="font-display text-xl font-bold text-slate-500">
+                -
+              </span>
+
+              <div className="flex flex-col items-center gap-2">
+                <span className="max-w-[9rem] truncate text-xs font-bold uppercase tracking-wide text-slate-300">
+                  {matchId
+                    ? (rivalTeamFor(matchId)?.name ?? 'Rival')
+                    : 'Rival'}
+                </span>
+
+                <input
+                  type="number"
+                  min={0}
+                  value={scoreRival}
+                  onChange={(e) =>
+                    setScoreRival(Math.max(0, parseInt(e.target.value) || 0))
+                  }
+                  className="w-16 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-center text-2xl font-bold text-slate-100 outline-none transition focus:border-accent-500/50"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ASUNTO (el resultado genera el suyo con el marcador) */}
+        {!isResult && (
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">
+              Título
+            </label>
+
+            <input
+              type="text"
+              value={subject}
+              maxLength={120}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Resume el problema en una línea"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-accent-500/50 focus:ring-2 focus:ring-accent-500/30"
+            />
+          </div>
+        )}
 
         {/* DESCRIPCION */}
         <div>
           <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">
-            Qué ha pasado
+            {isResult ? 'Comentarios (opcional)' : 'Qué ha pasado'}
           </label>
 
           <textarea
             value={description}
-            rows={4}
+            rows={isResult ? 2 : 4}
             maxLength={1000}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Explícalo con el mayor detalle posible: cuándo, con quién y qué ocurrió."
+            placeholder={
+              isResult
+                ? 'Prórroga, penaltis, goleadores, cualquier detalle que quieras añadir.'
+                : 'Explícalo con el mayor detalle posible: cuándo, con quién y qué ocurrió.'
+            }
             className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-accent-500/50 focus:ring-2 focus:ring-accent-500/30"
           />
         </div>
@@ -342,8 +446,12 @@ export function IncidentsPage({
         {/* ENLACE */}
         <div>
           <label className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-            <Link2 className="h-4 w-4 text-accent-400" /> Enlace de prueba
-            (opcional)
+            <Link2 className="h-4 w-4 text-accent-400" /> Enlace de prueba{' '}
+            {isResult ? (
+              <span className="text-red-400">(obligatorio)</span>
+            ) : (
+              '(opcional)'
+            )}
           </label>
 
           <input
@@ -356,7 +464,7 @@ export function IncidentsPage({
 
           <p className="mt-1.5 text-xs text-slate-500">
             Sube la captura o el clip donde quieras (Imgur, Streamable, Drive...)
-            y pega aquí el enlace.
+            y pega aquí el enlace. No se sube nada a la web.
           </p>
         </div>
 
@@ -365,7 +473,11 @@ export function IncidentsPage({
           disabled={submitting}
           icon={<Send className="h-4 w-4" />}
         >
-          {submitting ? 'Enviando...' : 'Enviar incidencia'}
+          {submitting
+            ? 'Enviando...'
+            : isResult
+              ? 'Enviar resultado'
+              : 'Enviar incidencia'}
         </BroadcastButton>
       </form>
 
@@ -410,9 +522,26 @@ export function IncidentsPage({
                   </span>
                 </div>
 
-                <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">
-                  {incident.description}
-                </p>
+                {incident.category === 'resultado' &&
+                  incident.score_own != null && (
+                    <div className="mt-3 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-2.5">
+                      <span className="text-xs uppercase tracking-wider text-slate-500">
+                        Marcador
+                      </span>
+
+                      <span className="font-display text-lg font-bold text-slate-100">
+                        {incident.score_own}{' '}
+                        <span className="text-slate-600">-</span>{' '}
+                        {incident.score_rival}
+                      </span>
+                    </div>
+                  )}
+
+                {incident.description && (
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">
+                    {incident.description}
+                  </p>
+                )}
 
                 {incident.evidence_url && (
                   <a

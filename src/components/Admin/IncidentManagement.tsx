@@ -5,6 +5,7 @@ import {
   Check,
   ClipboardList,
   ExternalLink,
+  Trash2,
   Trophy,
   X,
 } from 'lucide-react';
@@ -12,6 +13,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useTournamentContext } from '@/context/TournamentContext';
 import { showToast } from '@/components/UI/Toast';
+import { ConfirmationModal } from '@/components/UI/ConfirmationModal';
 
 import {
   INCIDENT_CATEGORY_LABEL,
@@ -23,7 +25,6 @@ import type {
   Captain,
   Incident,
   IncidentStatus,
-  MatchResult,
 } from '@/types/tournament';
 
 const STATUS_FILTERS: { value: IncidentStatus; label: string }[] = [
@@ -37,28 +38,24 @@ export function IncidentManagement() {
   const { teams, matches } = useTournamentContext();
 
   const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [results, setResults] = useState<MatchResult[]>([]);
   const [captains, setCaptains] = useState<Captain[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<IncidentStatus>('open');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Incident | null>(null);
+  const [confirmPurge, setConfirmPurge] = useState(false);
 
   const load = useCallback(async () => {
-    const [incidentsRes, resultsRes, captainsRes] = await Promise.all([
+    const [incidentsRes, captainsRes] = await Promise.all([
       supabase
         .from('incidents')
-        .select('*')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('match_results')
         .select('*')
         .order('created_at', { ascending: false }),
       supabase.from('captains').select('*'),
     ]);
 
     setIncidents((incidentsRes.data ?? []) as Incident[]);
-    setResults((resultsRes.data ?? []) as MatchResult[]);
     setCaptains((captainsRes.data ?? []) as Captain[]);
     setLoading(false);
   }, []);
@@ -71,11 +68,6 @@ export function IncidentManagement() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'incidents' },
-        () => load(),
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'match_results' },
         () => load(),
       )
       .subscribe();
@@ -91,18 +83,17 @@ export function IncidentManagement() {
   const captainName = (id: string | null) =>
     captains.find((c) => c.id === id)?.name ?? 'Capitán';
 
+  const matchFor = (id: string | null) =>
+    id ? (matches.find((m) => m.id === id) ?? null) : null;
+
   const matchLabel = (id: string | null) => {
-    if (!id) return null;
-    const match = matches.find((m) => m.id === id);
+    const match = matchFor(id);
     if (!match) return null;
 
     return `Ronda ${match.round_number} · ${teamName(match.team1_id)} vs ${teamName(match.team2_id)}`;
   };
 
-  const resolve = async (
-    incidentId: string,
-    status: IncidentStatus,
-  ) => {
+  const resolve = async (incidentId: string, status: IncidentStatus) => {
     setBusyId(incidentId);
 
     const { error } = await supabase.rpc('resolve_incident', {
@@ -123,41 +114,17 @@ export function IncidentManagement() {
     load();
   };
 
-  const reviewResult = async (
-    resultId: string,
-    status: 'confirmed' | 'rejected',
-  ) => {
-    setBusyId(resultId);
-
-    const { error } = await supabase.rpc('review_match_result', {
-      p_result_id: resultId,
-      p_status: status,
-    });
-
-    setBusyId(null);
-
-    if (error) {
-      showToast('No se pudo validar el resultado', 'error');
-      return;
-    }
-
-    showToast(
-      status === 'confirmed' ? 'Resultado confirmado' : 'Resultado rechazado',
-    );
-    load();
-  };
-
   /**
-   * Valida el resultado y, de paso, coloca al ganador en el cuadro.
+   * Da por bueno el resultado reportado y clasifica al ganador en el cuadro.
    */
-  const confirmAndAdvance = async (
-    resultId: string,
+  const confirmResult = async (
+    incidentId: string,
     winnerTeamId: string,
   ) => {
-    setBusyId(resultId);
+    setBusyId(incidentId);
 
-    const { error } = await supabase.rpc('confirm_match_result', {
-      p_result_id: resultId,
+    const { error } = await supabase.rpc('resolve_incident_result', {
+      p_incident_id: incidentId,
       p_winner_team_id: winnerTeamId,
     });
 
@@ -172,9 +139,67 @@ export function IncidentManagement() {
     load();
   };
 
-  const visibleIncidents = incidents.filter((i) => i.status === filter);
-  const pendingResults = results.filter((r) => r.status === 'pending_review');
+  const remove = async (incident: Incident) => {
+    setConfirmDelete(null);
+    setBusyId(incident.id);
+
+    const { error } = await supabase
+      .from('incidents')
+      .delete()
+      .eq('id', incident.id);
+
+    setBusyId(null);
+
+    if (error) {
+      showToast('No se pudo eliminar la incidencia', 'error');
+      return;
+    }
+
+    showToast('Incidencia eliminada');
+    load();
+  };
+
+  const purgeDismissed = async () => {
+    setConfirmPurge(false);
+
+    const { error } = await supabase
+      .from('incidents')
+      .delete()
+      .eq('status', 'dismissed');
+
+    if (error) {
+      showToast('No se pudieron eliminar las incidencias', 'error');
+      return;
+    }
+
+    showToast('Incidencias descartadas eliminadas');
+    load();
+  };
+
+  /**
+   * Reportes de resultado todavía sin validar. Son incidencias como las
+   * demás, pero se muestran aparte porque se resuelven de otra forma:
+   * eligiendo ganador.
+   */
+  const pendingResults = incidents.filter(
+    (i) =>
+      i.category === 'resultado' &&
+      (i.status === 'open' || i.status === 'reviewing'),
+  );
+
+  const visibleIncidents = incidents.filter(
+    (i) =>
+      i.status === filter &&
+      !(
+        i.category === 'resultado' &&
+        (i.status === 'open' || i.status === 'reviewing')
+      ),
+  );
+
   const openCount = incidents.filter((i) => i.status === 'open').length;
+  const dismissedCount = incidents.filter(
+    (i) => i.status === 'dismissed',
+  ).length;
 
   if (loading) {
     return (
@@ -186,7 +211,7 @@ export function IncidentManagement() {
 
   return (
     <div className="space-y-8">
-      {/* ================= RESULTADOS PENDIENTES ================= */}
+      {/* ================= RESULTADOS POR VALIDAR ================= */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <ClipboardList className="h-5 w-5 text-sky-400" />
@@ -203,8 +228,8 @@ export function IncidentManagement() {
         </div>
 
         <p className="text-sm text-slate-500">
-          Elige quién ha ganado: el resultado queda confirmado y el equipo se
-          coloca solo en la siguiente ronda del cuadro.
+          Los capitanes los reportan desde Incidencias. Elige quién ha ganado:
+          el equipo se coloca solo en la siguiente ronda del cuadro.
         </p>
 
         {pendingResults.length === 0 ? (
@@ -212,12 +237,21 @@ export function IncidentManagement() {
             No hay resultados pendientes de validar.
           </div>
         ) : (
-          pendingResults.map((result) => {
-            const match = matches.find((m) => m.id === result.match_id);
+          pendingResults.map((incident) => {
+            const match = matchFor(incident.match_id);
+            const isOwnTeam1 = match?.team1_id === incident.team_id;
+
+            /* El marcador se guarda desde el punto de vista de quien reporta. */
+            const team1Score = isOwnTeam1
+              ? incident.score_own
+              : incident.score_rival;
+            const team2Score = isOwnTeam1
+              ? incident.score_rival
+              : incident.score_own;
 
             return (
               <div
-                key={result.id}
+                key={incident.id}
                 className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -225,56 +259,36 @@ export function IncidentManagement() {
                     <p className="font-display text-lg font-bold uppercase tracking-wide text-slate-100">
                       {teamName(match?.team1_id ?? null)}{' '}
                       <span className="text-accent-400">
-                        {result.team1_score} - {result.team2_score}
+                        {team1Score} - {team2Score}
                       </span>{' '}
                       {teamName(match?.team2_id ?? null)}
                     </p>
 
                     <p className="mt-0.5 text-xs uppercase tracking-wider text-slate-500">
-                      {matchLabel(result.match_id) ?? 'Partido'} · Reportado por{' '}
-                      {captainName(result.reported_by)}
+                      {matchLabel(incident.match_id) ?? 'Partido'} · Reportado
+                      por {captainName(incident.captain_id)} (
+                      {teamName(incident.team_id)})
                     </p>
                   </div>
 
                   <button
-                    onClick={() => reviewResult(result.id, 'rejected')}
-                    disabled={busyId === result.id}
+                    onClick={() => resolve(incident.id, 'dismissed')}
+                    disabled={busyId === incident.id}
                     className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-red-300 transition hover:bg-red-500/20 disabled:opacity-40"
                   >
-                    <X className="h-4 w-4" /> Rechazar
+                    <X className="h-4 w-4" /> Descartar
                   </button>
                 </div>
 
-                {(result.had_extra_time || result.had_penalties) && (
-                  <p className="mt-2 text-xs text-slate-400">
-                    {result.had_extra_time && 'Prórroga'}
-                    {result.had_extra_time && result.had_penalties && ' · '}
-                    {result.had_penalties &&
-                      `Penaltis ${result.penalty_team1 ?? 0} - ${result.penalty_team2 ?? 0}`}
-                  </p>
-                )}
-
-                {result.scorers.length > 0 && (
-                  <p className="mt-2 text-xs text-slate-400">
-                    Goleadores:{' '}
-                    {result.scorers
-                      .map(
-                        (s) =>
-                          `${s.player}${s.minute != null ? ` (${s.minute}')` : ''}`,
-                      )
-                      .join(', ')}
-                  </p>
-                )}
-
-                {result.notes && (
+                {incident.description && (
                   <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">
-                    {result.notes}
+                    {incident.description}
                   </p>
                 )}
 
-                {result.evidence_url && isSafeUrl(result.evidence_url) && (
+                {incident.evidence_url && isSafeUrl(incident.evidence_url) && (
                   <a
-                    href={result.evidence_url}
+                    href={incident.evidence_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-400 transition hover:border-accent-500/40 hover:text-accent-400"
@@ -286,23 +300,13 @@ export function IncidentManagement() {
                 {/* QUIÉN GANA Y PASA DE RONDA */}
                 <div className="mt-4 border-t border-slate-800 pt-4">
                   {match?.winner_id ? (
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-sm text-slate-400">
-                        Este partido ya está clasificado:{' '}
-                        <span className="font-bold text-emerald-300">
-                          {teamName(match.winner_id)}
-                        </span>
-                        . Para cambiarlo, deshazlo antes desde el cuadro.
-                      </p>
-
-                      <button
-                        onClick={() => reviewResult(result.id, 'confirmed')}
-                        disabled={busyId === result.id}
-                        className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
-                      >
-                        <Check className="h-4 w-4" /> Confirmar resultado
-                      </button>
-                    </div>
+                    <p className="text-sm text-slate-400">
+                      Este partido ya está clasificado:{' '}
+                      <span className="font-bold text-emerald-300">
+                        {teamName(match.winner_id)}
+                      </span>
+                      . Para cambiarlo, deshazlo antes desde el cuadro.
+                    </p>
                   ) : !match?.team1_id || !match?.team2_id ? (
                     <p className="text-sm text-slate-500">
                       El partido todavía no tiene los dos equipos asignados.
@@ -315,16 +319,31 @@ export function IncidentManagement() {
 
                       <div className="flex flex-wrap gap-2">
                         {[match.team1_id, match.team2_id].map((teamId) => {
-                          const reported =
-                            result.winner_team_id === teamId;
+                          const ownScore = isOwnTeam1 ? team1Score : team2Score;
+                          const otherScore = isOwnTeam1
+                            ? team2Score
+                            : team1Score;
+
+                          const reportedWinner =
+                            ownScore != null &&
+                            otherScore != null &&
+                            ownScore !== otherScore
+                              ? ownScore > otherScore
+                                ? incident.team_id
+                                : match.team1_id === incident.team_id
+                                  ? match.team2_id
+                                  : match.team1_id
+                              : null;
+
+                          const reported = reportedWinner === teamId;
 
                           return (
                             <button
                               key={teamId}
                               onClick={() =>
-                                confirmAndAdvance(result.id, teamId as string)
+                                confirmResult(incident.id, teamId as string)
                               }
-                              disabled={busyId === result.id}
+                              disabled={busyId === incident.id}
                               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold uppercase tracking-wide transition disabled:opacity-40 ${
                                 reported
                                   ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
@@ -342,11 +361,6 @@ export function IncidentManagement() {
                           );
                         })}
                       </div>
-
-                      <p className="mt-2 text-xs text-slate-500">
-                        Al elegir ganador, el resultado queda confirmado y el
-                        equipo pasa automáticamente a la siguiente ronda.
-                      </p>
                     </>
                   )}
                 </div>
@@ -372,7 +386,7 @@ export function IncidentManagement() {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {STATUS_FILTERS.map((f) => (
             <button
               key={f.value}
@@ -386,6 +400,16 @@ export function IncidentManagement() {
               {f.label}
             </button>
           ))}
+
+          {filter === 'dismissed' && dismissedCount > 0 && (
+            <button
+              onClick={() => setConfirmPurge(true)}
+              className="ml-auto flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-red-300 transition hover:bg-red-500/20"
+            >
+              <Trash2 className="h-4 w-4" /> Vaciar descartadas (
+              {dismissedCount})
+            </button>
+          )}
         </div>
 
         {visibleIncidents.length === 0 ? (
@@ -452,46 +476,64 @@ export function IncidentManagement() {
 
                 {/* ACCIONES */}
                 <div className="mt-4 space-y-2 border-t border-slate-800 pt-4">
-                  <textarea
-                    value={notes[incident.id] ?? ''}
-                    rows={2}
-                    maxLength={1000}
-                    onChange={(e) =>
-                      setNotes((prev) => ({
-                        ...prev,
-                        [incident.id]: e.target.value,
-                      }))
-                    }
-                    placeholder="Respuesta para el capitán (opcional)"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-accent-500/50 focus:ring-2 focus:ring-accent-500/30"
-                  />
+                  {incident.status !== 'dismissed' && (
+                    <textarea
+                      value={notes[incident.id] ?? ''}
+                      rows={2}
+                      maxLength={1000}
+                      onChange={(e) =>
+                        setNotes((prev) => ({
+                          ...prev,
+                          [incident.id]: e.target.value,
+                        }))
+                      }
+                      placeholder="Respuesta para el capitán (opcional)"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-accent-500/50 focus:ring-2 focus:ring-accent-500/30"
+                    />
+                  )}
 
                   <div className="flex flex-wrap gap-2">
-                    {incident.status !== 'reviewing' && (
+                    {incident.status !== 'reviewing' &&
+                      incident.status !== 'dismissed' && (
+                        <button
+                          onClick={() => resolve(incident.id, 'reviewing')}
+                          disabled={busyId === incident.id}
+                          className="rounded-lg border border-accent-500/30 bg-accent-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-accent-400 transition hover:bg-accent-500/20 disabled:opacity-40"
+                        >
+                          En revisión
+                        </button>
+                      )}
+
+                    {incident.status !== 'resolved' && (
                       <button
-                        onClick={() => resolve(incident.id, 'reviewing')}
+                        onClick={() => resolve(incident.id, 'resolved')}
                         disabled={busyId === incident.id}
-                        className="rounded-lg border border-accent-500/30 bg-accent-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-accent-400 transition hover:bg-accent-500/20 disabled:opacity-40"
+                        className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
                       >
-                        En revisión
+                        <Check className="h-4 w-4" /> Resolver
                       </button>
                     )}
 
-                    <button
-                      onClick={() => resolve(incident.id, 'resolved')}
-                      disabled={busyId === incident.id}
-                      className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
-                    >
-                      <Check className="h-4 w-4" /> Resolver
-                    </button>
+                    {incident.status !== 'dismissed' && (
+                      <button
+                        onClick={() => resolve(incident.id, 'dismissed')}
+                        disabled={busyId === incident.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-400 transition hover:text-slate-200 disabled:opacity-40"
+                      >
+                        <X className="h-4 w-4" /> Descartar
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() => resolve(incident.id, 'dismissed')}
-                      disabled={busyId === incident.id}
-                      className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-400 transition hover:text-slate-200 disabled:opacity-40"
-                    >
-                      <X className="h-4 w-4" /> Descartar
-                    </button>
+                    {/* Solo se borra lo descartado: lo resuelto es el histórico */}
+                    {incident.status === 'dismissed' && (
+                      <button
+                        onClick={() => setConfirmDelete(incident)}
+                        disabled={busyId === incident.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-red-300 transition hover:bg-red-500/20 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-4 w-4" /> Eliminar
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -499,6 +541,26 @@ export function IncidentManagement() {
           })
         )}
       </section>
+
+      <ConfirmationModal
+        open={!!confirmDelete}
+        title="Eliminar incidencia"
+        description={`Se borrará definitivamente "${confirmDelete?.subject ?? ''}". Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        destructive
+        onConfirm={() => confirmDelete && remove(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
+
+      <ConfirmationModal
+        open={confirmPurge}
+        title="Vaciar descartadas"
+        description={`Se borrarán definitivamente las ${dismissedCount} incidencias descartadas. Las abiertas, en revisión y resueltas no se tocan. Esta acción no se puede deshacer.`}
+        confirmLabel="Vaciar"
+        destructive
+        onConfirm={purgeDismissed}
+        onCancel={() => setConfirmPurge(false)}
+      />
     </div>
   );
 }
