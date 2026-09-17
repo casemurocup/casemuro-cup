@@ -15,7 +15,11 @@
   "assets": {
     "directory": "./dist",
     // Cualquier ruta que no exista como archivo devuelve index.html, que es
-    // lo que necesita una SPA. Equivale al `public/_redirects` de Pages.
+    // lo que necesita una SPA.
+    //
+    // Por eso NO debe existir un `public/_redirects`: en Workers, la regla
+    // `/* /index.html 200` choca con esto y el despliegue se rechaza con
+    // "Infinite loop detected in this rule".
     "not_found_handling": "single-page-application"
   }
 }

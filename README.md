@@ -87,16 +87,24 @@ Estos permisos están aplicados en PostgreSQL (RLS + triggers + funciones
 Ver la tabla de configuración exacta más abajo. El proyecto es una SPA
 estática: cualquier hosting de sitios estáticos sirve.
 
-### Cloudflare Pages
+### Cloudflare Workers (lo que está en uso)
 
 | Ajuste | Valor |
 | --- | --- |
-| Framework preset | Vite |
 | Build command | `npm run build` |
-| Build output directory | `dist` |
-| Node version | variable de entorno `NODE_VERSION = 20` |
+| Output directory | `dist` |
+| Deploy command | `npx wrangler deploy` |
 
-El archivo `public/_redirects` ya incluye la regla de SPA.
+`wrangler.jsonc` declara los assets y el enrutado de SPA
+(`not_found_handling: "single-page-application"`).
+
+⚠️ Las variables `VITE_*` van en **Settings → Build → Build variables**, no en
+las *Variables and Secrets* de runtime: Vite las incrusta al compilar, y para
+cuando el Worker se ejecuta ya no hay nada que inyectar.
+
+⚠️ No añadas un `public/_redirects`. En Workers, la regla `/* /index.html 200`
+choca con `not_found_handling` y el despliegue se rechaza con
+*"Infinite loop detected in this rule"*. En Cloudflare **Pages** sí hace falta.
 
 ### Vercel
 
