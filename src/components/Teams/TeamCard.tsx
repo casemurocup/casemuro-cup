@@ -1,11 +1,11 @@
 import { Pencil, Trash2 } from 'lucide-react';
 import { TeamLogo } from '@/components/UI/TeamLogo';
 import { formatTeamNumber } from '@/lib/bracket';
-import type { Team, TeamCount } from '@/types/tournament';
+import type { Team } from '@/types/tournament';
 
 interface TeamCardProps {
   team: Team;
-  teamCount: TeamCount;
+  teamCount: number;
   onEdit: (team: Team) => void;
   onDelete: (team: Team) => void;
   disabled?: boolean;

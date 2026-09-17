@@ -76,7 +76,7 @@ export function IncidentsPage({
   onNavigate: (view: View) => void;
 }) {
   const { captain, loading: authLoading } = useCaptainAuth();
-  const { teams, matches } = useTournamentContext();
+  const { tournament, teams, matches } = useTournamentContext();
 
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +175,12 @@ export function IncidentsPage({
     const rival =
       teams.find((t) => t.id === rivalId)?.name ?? 'Por decidir';
 
-    return `Ronda ${match.round_number} · vs ${rival}`;
+    const roundLabel =
+      tournament?.format === 'league'
+        ? `Jornada ${match.round_number}`
+        : `Ronda ${match.round_number}`;
+
+    return `${roundLabel} · vs ${rival}`;
   };
 
   const handleSubmit = async (event: FormEvent) => {

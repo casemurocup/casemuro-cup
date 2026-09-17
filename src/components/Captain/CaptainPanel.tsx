@@ -19,7 +19,7 @@ import { TeamLogo } from '@/components/UI/TeamLogo';
 import { BroadcastButton } from '@/components/UI/BroadcastButton';
 import { MatchChat } from '@/components/Captain/MatchChat';
 import { MatchDetailView } from '@/components/Captain/MatchDetailView';
-import { roundName, matchesInRound } from '@/lib/bracket';
+import { matchRoundLabel } from '@/lib/bracket';
 
 import type {
   Match,
@@ -133,8 +133,15 @@ export function CaptainPanel({ onSignOut }: CaptainPanelProps) {
    * oficial definido arriba.
    */
   const getMatchSchedule = (match: Match) => {
+    /*
+     * El calendario automático es el de la copa (una fecha por ronda). En una
+     * liga las jornadas no se corresponden con esas fechas, así que ahí solo
+     * vale lo que haya guardado la organización en el partido.
+     */
     const automaticSchedule =
-      ROUND_SCHEDULE[match.round_number];
+      tournament?.format === 'league'
+        ? undefined
+        : ROUND_SCHEDULE[match.round_number];
 
     return {
       date:
@@ -451,11 +458,12 @@ export function CaptainPanel({ onSignOut }: CaptainPanelProps) {
    * Ronda del próximo partido.
    */
   const matchRound = nextMatch
-    ? matchesInRound(
+    ? matchRoundLabel(
+        tournament?.format ?? 'cup',
         tournament?.team_count ?? 64,
         nextMatch.round_number
       )
-    : 0;
+    : '';
 
   /**
    * Fecha/hora que se mostrará para el próximo partido.
@@ -676,8 +684,8 @@ export function CaptainPanel({ onSignOut }: CaptainPanelProps) {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <InfoCard
                   icon={Trophy}
-                  label="Ronda"
-                  value={roundName(matchRound)}
+                  label={tournament?.format === 'league' ? 'Jornada' : 'Ronda'}
+                  value={matchRound}
                 />
 
                 <InfoCard
@@ -780,7 +788,8 @@ export function CaptainPanel({ onSignOut }: CaptainPanelProps) {
                 const won =
                   m.winner_id === myTeam.id;
 
-                const r = matchesInRound(
+                const r = matchRoundLabel(
+                  tournament?.format ?? 'cup',
                   tournament?.team_count ?? 64,
                   m.round_number
                 );
@@ -822,7 +831,7 @@ export function CaptainPanel({ onSignOut }: CaptainPanelProps) {
                         </p>
 
                         <p className="text-xs text-slate-500">
-                          {roundName(r)} —{' '}
+                          {r} —{' '}
                           {formatDate(schedule.date)}{' '}
                           ·{' '}
                           {formatTime(schedule.time)}

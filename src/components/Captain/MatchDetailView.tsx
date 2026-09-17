@@ -3,7 +3,7 @@ import { Calendar, Clock, Trophy, MapPin, Users, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useTournamentContext } from '@/context/TournamentContext';
 import { TeamLogo } from '@/components/UI/TeamLogo';
-import { roundName, matchesInRound } from '@/lib/bracket';
+import { matchRoundLabel } from '@/lib/bracket';
 import type { Match, MatchResult } from '@/types/tournament';
 
 interface MatchDetailViewProps {
@@ -37,7 +37,7 @@ export function MatchDetailView({ match }: MatchDetailViewProps) {
 
   const team1 = teams.find((t) => t.id === match.team1_id) ?? null;
   const team2 = teams.find((t) => t.id === match.team2_id) ?? null;
-  const round = matchesInRound(tournament?.team_count ?? 32, match.round_number);
+  const round = matchRoundLabel(tournament?.format ?? 'cup', tournament?.team_count ?? 32, match.round_number);
 
   const formatDate = (d: string | null) => {
     if (!d) return 'Por determinar';
@@ -60,7 +60,7 @@ export function MatchDetailView({ match }: MatchDetailViewProps) {
         <div className="mb-4 flex items-center gap-2">
           <Trophy className="h-5 w-5 text-sky-400" />
           <h3 className="font-display text-xl font-bold uppercase tracking-wide text-slate-100">
-            {roundName(round)}
+            {round}
           </h3>
           <span className="ml-auto rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-400">
             {stateLabel()}
@@ -113,7 +113,7 @@ export function MatchDetailView({ match }: MatchDetailViewProps) {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <InfoRow icon={Calendar} label="Fecha" value={formatDate(match.scheduled_date)} />
           <InfoRow icon={Clock} label="Hora" value={formatTime(match.scheduled_time)} />
-          <InfoRow icon={Users} label="Ronda" value={roundName(round)} />
+          <InfoRow icon={Users} label={tournament?.format === 'league' ? "Jornada" : "Ronda"} value={round} />
           <InfoRow icon={MapPin} label="Estado" value={stateLabel()} />
         </div>
       </div>

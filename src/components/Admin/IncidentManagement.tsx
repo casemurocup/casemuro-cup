@@ -35,7 +35,7 @@ const STATUS_FILTERS: { value: IncidentStatus; label: string }[] = [
 ];
 
 export function IncidentManagement() {
-  const { teams, matches } = useTournamentContext();
+  const { tournament, teams, matches } = useTournamentContext();
 
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [captains, setCaptains] = useState<Captain[]>([]);
@@ -45,6 +45,9 @@ export function IncidentManagement() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Incident | null>(null);
   const [confirmPurge, setConfirmPurge] = useState(false);
+  const [scores, setScores] = useState<Record<string, [number, number]>>({});
+
+  const isLeague = tournament?.format === 'league';
 
   const load = useCallback(async () => {
     const [incidentsRes, captainsRes] = await Promise.all([
@@ -90,7 +93,39 @@ export function IncidentManagement() {
     const match = matchFor(id);
     if (!match) return null;
 
-    return `Ronda ${match.round_number} · ${teamName(match.team1_id)} vs ${teamName(match.team2_id)}`;
+    const roundLabel = isLeague
+      ? `Jornada ${match.round_number}`
+      : `Ronda ${match.round_number}`;
+
+    return `${roundLabel} · ${teamName(match.team1_id)} vs ${teamName(match.team2_id)}`;
+  };
+
+  /**
+   * En liga no se elige ganador: el empate es un resultado válido, así que la
+   * organización confirma el marcador tal cual y se anota en el partido.
+   */
+  const confirmLeagueResult = async (
+    incidentId: string,
+    team1Score: number,
+    team2Score: number,
+  ) => {
+    setBusyId(incidentId);
+
+    const { error } = await supabase.rpc('resolve_incident_league_result', {
+      p_incident_id: incidentId,
+      p_team1_score: team1Score,
+      p_team2_score: team2Score,
+    });
+
+    setBusyId(null);
+
+    if (error) {
+      showToast(error.message || 'No se pudo validar el resultado', 'error');
+      return;
+    }
+
+    showToast('Resultado anotado en la clasificación');
+    load();
   };
 
   const resolve = async (incidentId: string, status: IncidentStatus) => {
@@ -228,8 +263,9 @@ export function IncidentManagement() {
         </div>
 
         <p className="text-sm text-slate-500">
-          Los capitanes los reportan desde Incidencias. Elige quién ha ganado:
-          el equipo se coloca solo en la siguiente ronda del cuadro.
+          {isLeague
+            ? 'Los capitanes los reportan desde Incidencias. Al confirmar el marcador, se anota en el partido y la clasificación se actualiza sola.'
+            : 'Los capitanes los reportan desde Incidencias. Elige quién ha ganado: el equipo se coloca solo en la siguiente ronda del cuadro.'}
         </p>
 
         {pendingResults.length === 0 ? (
@@ -297,9 +333,90 @@ export function IncidentManagement() {
                   </a>
                 )}
 
-                {/* QUIÉN GANA Y PASA DE RONDA */}
+                {/* VALIDACIÓN DEL RESULTADO */}
                 <div className="mt-4 border-t border-slate-800 pt-4">
-                  {match?.winner_id ? (
+                  {isLeague ? (
+                    !match?.team1_id || !match?.team2_id ? (
+                      <p className="text-sm text-slate-500">
+                        El partido todavía no tiene los dos equipos asignados.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Confirmar marcador
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="max-w-[8rem] truncate text-xs text-slate-400">
+                              {teamName(match.team1_id)}
+                            </span>
+
+                            <input
+                              type="number"
+                              min={0}
+                              value={
+                                scores[incident.id]?.[0] ?? team1Score ?? 0
+                              }
+                              onChange={(e) =>
+                                setScores((prev) => ({
+                                  ...prev,
+                                  [incident.id]: [
+                                    Math.max(0, parseInt(e.target.value) || 0),
+                                    prev[incident.id]?.[1] ?? team2Score ?? 0,
+                                  ],
+                                }))
+                              }
+                              className="w-14 rounded-lg border border-slate-700 bg-slate-950/50 px-2 py-1.5 text-center text-lg font-bold text-slate-100 outline-none focus:border-accent-500/50"
+                            />
+
+                            <span className="font-bold text-slate-600">-</span>
+
+                            <input
+                              type="number"
+                              min={0}
+                              value={
+                                scores[incident.id]?.[1] ?? team2Score ?? 0
+                              }
+                              onChange={(e) =>
+                                setScores((prev) => ({
+                                  ...prev,
+                                  [incident.id]: [
+                                    prev[incident.id]?.[0] ?? team1Score ?? 0,
+                                    Math.max(0, parseInt(e.target.value) || 0),
+                                  ],
+                                }))
+                              }
+                              className="w-14 rounded-lg border border-slate-700 bg-slate-950/50 px-2 py-1.5 text-center text-lg font-bold text-slate-100 outline-none focus:border-accent-500/50"
+                            />
+
+                            <span className="max-w-[8rem] truncate text-xs text-slate-400">
+                              {teamName(match.team2_id)}
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() =>
+                              confirmLeagueResult(
+                                incident.id,
+                                scores[incident.id]?.[0] ?? team1Score ?? 0,
+                                scores[incident.id]?.[1] ?? team2Score ?? 0,
+                              )
+                            }
+                            disabled={busyId === incident.id}
+                            className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
+                          >
+                            <Check className="h-4 w-4" /> Confirmar
+                          </button>
+                        </div>
+
+                        <p className="mt-2 text-xs text-slate-500">
+                          Puedes corregir el marcador antes de confirmarlo. La
+                          clasificación se recalcula sola.
+                        </p>
+                      </>
+                    )
+                  ) : match?.winner_id ? (
                     <p className="text-sm text-slate-400">
                       Este partido ya está clasificado:{' '}
                       <span className="font-bold text-emerald-300">

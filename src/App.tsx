@@ -20,7 +20,7 @@ import { ChatNotificationProvider } from '@/context/ChatNotificationContext';
 import { NavBar } from '@/components/Layout/NavBar';
 import { HomePage } from '@/components/Home/HomePage';
 import { AdminPanel } from '@/components/Admin/AdminPanel';
-import { Bracket } from '@/components/Bracket/Bracket';
+import { CompetitionsPage } from '@/components/Competitions/CompetitionsPage';
 import { TeamRoulette } from '@/components/Bracket/TeamRoulette';
 import { RulesPage } from '@/components/Rules/RulesPage';
 import { IncidentsPage } from '@/components/Incidents/IncidentsPage';
@@ -93,7 +93,7 @@ function DrawPage({
         </p>
 
         <button
-          onClick={() => onNavigate('bracket')}
+          onClick={() => onNavigate('competitions')}
           className="mt-6 rounded-xl bg-accent-500 px-6 py-3 text-sm font-bold uppercase tracking-wide text-slate-950 shadow-lg shadow-accent-500/20 transition hover:bg-accent-400"
         >
           Ver Cuadro
@@ -103,8 +103,36 @@ function DrawPage({
   }
 
   /*
-   * Los usuarios que no sean administradores pueden
-   * consultar la pestaña, pero no ejecutar el sorteo.
+   * En una liga no hay sorteo: el calendario se genera
+   * desde Administración con todos contra todos.
+   */
+  if (tournament.format === 'league') {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/60 py-20 text-center">
+        <Dices className="mb-4 h-12 w-12 text-accent-400" />
+
+        <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-slate-100">
+          Este torneo es una liga
+        </h1>
+
+        <p className="mt-2 max-w-md text-sm text-slate-400">
+          Las ligas no tienen sorteo: todos los equipos se enfrentan entre sí.
+          Genera el calendario desde Administración.
+        </p>
+
+        <button
+          onClick={() => onNavigate('admin')}
+          className="mt-6 rounded-xl border border-accent-500/30 bg-accent-500/10 px-6 py-3 text-sm font-bold uppercase tracking-wide text-accent-400 transition hover:bg-accent-500/20"
+        >
+          Ir a Administración
+        </button>
+      </div>
+    );
+  }
+
+  /*
+   * La pestaña ya solo la ve la administración, pero si alguien llega aquí
+   * sin serlo, no se le ofrece ejecutar el sorteo.
    */
   if (!isAdmin) {
     return (
@@ -162,7 +190,7 @@ function DrawPage({
           await generateBracketWithDraw(drawOrder);
 
         if (success) {
-          onNavigate('bracket');
+          onNavigate('competitions');
         }
       }}
       onCancel={() => onNavigate('home')}
@@ -335,9 +363,9 @@ function AppContent() {
         </div>
 
         {/* CUADRO */}
-        {view === 'bracket' && (
+        {view === 'competitions' && (
           <div className="page-enter">
-            <Bracket
+            <CompetitionsPage
               onNavigate={handleNavigate}
               isAdmin={isAdmin}
             />
@@ -453,7 +481,7 @@ function PresentationNotice({
 
       <button
         onClick={() =>
-          onNavigate('bracket')
+          onNavigate('competitions')
         }
         className="rounded-lg bg-accent-500 px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-slate-950 transition hover:bg-accent-400"
       >

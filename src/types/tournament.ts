@@ -1,5 +1,7 @@
 export type TeamCount = 32 | 64;
 
+export type TournamentFormat = 'cup' | 'league';
+
 export type TournamentStatus =
   | 'setup'
   | 'draw_in_progress'
@@ -9,7 +11,10 @@ export type TournamentStatus =
 export interface Tournament {
   id: string;
   name: string;
-  team_count: TeamCount;
+  format: TournamentFormat;
+  /* En copa es 32 o 64; en liga, cualquier numero entre 4 y 24. */
+  team_count: number;
+  double_round: boolean;
   status: TournamentStatus;
   draw_pool: string[];
   current_draw_match: number;
@@ -43,6 +48,8 @@ export interface Match {
   team1_id: string | null;
   team2_id: string | null;
   winner_id: string | null;
+  team1_score: number | null;
+  team2_score: number | null;
   team1_reported_winner: string | null;
   team2_reported_winner: string | null;
   report_status: 'pending' | 'reported' | 'confirmed' | 'disputed';
@@ -163,7 +170,7 @@ export type View =
   | 'home'
   | 'admin'
   | 'draw'
-  | 'bracket'
+  | 'competitions'
   | 'rules'
   | 'incidents'
   | 'captain'

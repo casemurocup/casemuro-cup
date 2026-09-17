@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { buildBracketSkeleton } from '@/lib/bracket';
-import type { Match, Team, TeamCount, Tournament } from '@/types/tournament';
+import type { Match, Team, Tournament } from '@/types/tournament';
 
 interface TournamentData {
   tournament: Tournament | null;
@@ -209,7 +209,7 @@ export function useTournament() {
     setData((prev) => ({ ...prev, error: null }));
   }, []);
 
-  const setTeamCount = useCallback(async (count: TeamCount) => {
+  const setTeamCount = useCallback(async (count: number) => {
     if (!data.tournament) return false;
     if (data.tournament.status !== 'setup') {
       setData((prev) => ({ ...prev, error: 'No puedes cambiar el número de equipos una vez generado el cuadro.' }));
@@ -229,6 +229,55 @@ export function useTournament() {
       return false;
     }
   }, [data.tournament, data.teams.length, loadAll]);
+
+  /**
+   * Cambia el formato del torneo (copa o liga).
+   *
+   * El número de equipos viaja en la misma actualización porque la
+   * restricción de la base de datos los valida juntos: la copa solo admite
+   * 32 o 64, y la liga entre 4 y 24. Hacerlo en dos pasos sería rechazado.
+   */
+  const setTournamentFormat = useCallback(async (
+    format: 'cup' | 'league',
+    teamCount: number,
+  ) => {
+    if (!data.tournament) return false;
+    if (data.tournament.status !== 'setup') {
+      setData((prev) => ({ ...prev, error: 'No puedes cambiar el formato con el torneo en marcha. Reinicia el torneo primero.' }));
+      return false;
+    }
+    try {
+      const { error } = await supabase
+        .from('tournaments')
+        .update({ format, team_count: teamCount })
+        .eq('id', data.tournament.id);
+      if (error) throw error;
+      await loadAll();
+      return true;
+    } catch (err) {
+      setData((prev) => ({ ...prev, error: friendlyError(err) }));
+      return false;
+    }
+  }, [data.tournament, loadAll]);
+
+  /**
+   * Genera el calendario completo de la liga.
+   */
+  const generateLeagueFixtures = useCallback(async (doubleRound: boolean) => {
+    if (!data.tournament) return false;
+    try {
+      const { error } = await supabase.rpc('generate_league_fixtures', {
+        p_tournament_id: data.tournament.id,
+        p_double_round: doubleRound,
+      });
+      if (error) throw error;
+      await loadAll();
+      return true;
+    } catch (err) {
+      setData((prev) => ({ ...prev, error: friendlyError(err) }));
+      return false;
+    }
+  }, [data.tournament, loadAll]);
 
   const setTournamentName = useCallback(async (name: string) => {
     if (!data.tournament) return false;
@@ -464,6 +513,8 @@ export function useTournament() {
     clearError,
     setTeamCount,
     setTournamentName,
+    setTournamentFormat,
+    generateLeagueFixtures,
     addTeam,
     updateTeam,
     deleteTeam,

@@ -1,4 +1,4 @@
-import type { Match, MatchStatus, TeamCount } from '@/types/tournament';
+import type { Match, MatchStatus } from '@/types/tournament';
 
 export function totalRounds(teamCount: number): number {
   return Math.round(Math.log2(teamCount));
@@ -51,7 +51,7 @@ export function shuffle<T>(items: T[]): T[] {
   return arr;
 }
 
-export function buildBracketSkeleton(teamCount: TeamCount): { round_number: number; match_number: number }[] {
+export function buildBracketSkeleton(teamCount: number): { round_number: number; match_number: number }[] {
   const rounds = totalRounds(teamCount);
   const skeleton: { round_number: number; match_number: number }[] = [];
   for (let r = 1; r <= rounds; r++) {
@@ -79,4 +79,19 @@ export function groupMatchesByRound(matches: Match[]): Map<number, Match[]> {
 export function formatTeamNumber(number: number, teamCount: number): string {
   const digits = String(teamCount).length;
   return String(number).padStart(digits, '0');
+}
+
+/**
+ * Nombre de la ronda para mostrar al usuario.
+ *
+ * En copa depende de cuántos partidos quedan ("Octavos", "Final"...); en liga
+ * son jornadas numeradas, donde "Final" no significa nada.
+ */
+export function matchRoundLabel(
+  format: 'cup' | 'league',
+  teamCount: number,
+  roundNumber: number,
+): string {
+  if (format === 'league') return `Jornada ${roundNumber}`;
+  return roundName(matchesInRound(teamCount, roundNumber));
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Trash2, RotateCcw, Users, Sparkles, UserCog, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Users, Sparkles, UserCog, AlertTriangle, CalendarDays } from 'lucide-react';
 import { useTournamentContext } from '@/context/TournamentContext';
 import { TeamCard } from '@/components/Teams/TeamCard';
 import { TeamForm } from '@/components/Teams/TeamForm';
@@ -10,7 +10,7 @@ import { BroadcastButton } from '@/components/UI/BroadcastButton';
 import { showToast } from '@/components/UI/Toast';
 import { CaptainManagement } from '@/components/Admin/CaptainManagement';
 import { IncidentManagement } from '@/components/Admin/IncidentManagement';
-import type { Team, TeamCount } from '@/types/tournament';
+import type { Team, TeamCount, TournamentFormat } from '@/types/tournament';
 
 const DEMO_TEAMS = [
   'Real Madrid', 'Barcelona', 'Atlético Madrid', 'Valencia', 'Sevilla', 'Athletic Club',
@@ -23,7 +23,7 @@ const DEMO_TEAMS = [
 export function AdminPanel() {
   const {
     tournament, teams, loading,
-    setTeamCount, setTournamentName,
+    setTeamCount, setTournamentName, setTournamentFormat, generateLeagueFixtures,
     addTeam, updateTeam, deleteTeam, clearAllTeams,
     resetTournament,
   } = useTournamentContext();
@@ -34,6 +34,9 @@ export function AdminPanel() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [addingDemo, setAddingDemo] = useState(false);
   const [adminTab, setAdminTab] = useState<'teams' | 'captains' | 'incidents'>('teams');
+  const [doubleRound, setDoubleRound] = useState(false);
+  const [generatingFixtures, setGeneratingFixtures] = useState(false);
+  const [confirmFixtures, setConfirmFixtures] = useState(false);
 
   if (loading || !tournament) {
     return <div className="flex h-full items-center justify-center py-20 text-slate-500">Cargando...</div>;
@@ -44,6 +47,42 @@ export function AdminPanel() {
   const remaining = teamCount - registered;
   const canDraw = registered === teamCount;
   const isLocked = tournament.status !== 'setup';
+
+  /*
+   * Cuántos partidos y jornadas saldrían con los equipos que hay ahora.
+   * Con N equipos (o N+1 si es impar) son N-1 jornadas y N/2 partidos cada una.
+   */
+  const slots = registered % 2 === 1 ? registered + 1 : registered;
+  const matchdayCount =
+    registered >= 4 ? (slots - 1) * (doubleRound ? 2 : 1) : 0;
+  const fixtureCount =
+    registered >= 4 ? (registered * (registered - 1)) / 2 * (doubleRound ? 2 : 1) : 0;
+
+  const setFormat = async (format: TournamentFormat) => {
+    if (format === tournament.format) return;
+
+    /*
+     * Al cambiar de formato hay que ajustar el número de equipos: la copa
+     * solo admite 32 o 64 y la liga como mucho 24, así que la base de datos
+     * rechazaría el cambio si no se mueven los dos a la vez.
+     */
+    const ok = await setTournamentFormat(
+      format,
+      format === 'cup' ? 32 : Math.min(Math.max(registered, 4), 24),
+    );
+
+    if (ok) {
+      showToast(format === 'cup' ? 'Formato: Copa' : 'Formato: Liga');
+    }
+  };
+
+  const handleGenerateFixtures = async () => {
+    setConfirmFixtures(false);
+    setGeneratingFixtures(true);
+    const ok = await generateLeagueFixtures(doubleRound);
+    setGeneratingFixtures(false);
+    if (ok) showToast('Calendario generado');
+  };
 
   const handleAdd = () => setEditingTeam(null);
   const handleEdit = (team: Team) => setEditingTeam(team);
@@ -164,25 +203,106 @@ export function AdminPanel() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-300">Número de equipos</label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-300">Formato</label>
             <div className="flex gap-2">
-              {([32, 64] as TeamCount[]).map((n) => (
+              {(['cup', 'league'] as TournamentFormat[]).map((f) => (
                 <button
-                  key={n}
-                  onClick={() => setTeamCount(n)}
-                  disabled={isLocked || (n < registered)}
+                  key={f}
+                  onClick={() => setFormat(f)}
+                  disabled={isLocked}
+                  title={isLocked ? 'Reinicia el torneo para cambiar el formato' : undefined}
                   className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-bold transition-all disabled:opacity-40 ${
-                    teamCount === n
+                    tournament.format === f
                       ? 'border-accent-500 bg-accent-500/10 text-accent-400 shadow-lg shadow-accent-500/10'
                       : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  {n} equipos
+                  {f === 'cup' ? 'Copa' : 'Liga'}
                 </button>
               ))}
             </div>
+            <p className="mt-1.5 text-xs text-slate-500">
+              {tournament.format === 'cup'
+                ? 'Eliminatoria directa: quien pierde queda fuera.'
+                : 'Todos contra todos, clasificación por puntos.'}
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-300">Número de equipos</label>
+
+            {tournament.format === 'cup' ? (
+              <div className="flex gap-2">
+                {([32, 64] as TeamCount[]).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setTeamCount(n)}
+                    disabled={isLocked || (n < registered)}
+                    className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-bold transition-all disabled:opacity-40 ${
+                      teamCount === n
+                        ? 'border-accent-500 bg-accent-500/10 text-accent-400 shadow-lg shadow-accent-500/10'
+                        : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {n} equipos
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <input
+                  type="number"
+                  min={4}
+                  max={24}
+                  value={teamCount}
+                  onChange={(e) => setTeamCount(Number(e.target.value))}
+                  disabled={isLocked}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-slate-100 outline-none transition focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 disabled:opacity-60"
+                />
+                <p className="mt-1.5 text-xs text-slate-500">
+                  Entre 4 y 24. Si es impar, cada jornada descansa un equipo.
+                </p>
+              </>
+            )}
           </div>
         </div>
+
+        {/* Generación del calendario de liga */}
+        {tournament.format === 'league' && (
+          <div className="mt-4 border-t border-slate-800 pt-4">
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
+              <CalendarDays className="h-4 w-4 text-accent-400" /> Calendario de la liga
+            </label>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={doubleRound}
+                  onChange={(e) => setDoubleRound(e.target.checked)}
+                  className="accent-accent-500"
+                />
+                Ida y vuelta
+              </label>
+
+              <BroadcastButton
+                variant="primary"
+                size="md"
+                icon={<CalendarDays className="h-4 w-4" />}
+                onClick={() => setConfirmFixtures(true)}
+                disabled={registered < 4 || generatingFixtures}
+              >
+                {generatingFixtures ? 'Generando...' : 'Generar calendario'}
+              </BroadcastButton>
+
+              <span className="text-xs text-slate-500">
+                {registered < 4
+                  ? 'Necesitas al menos 4 equipos.'
+                  : `${registered} equipos · ${fixtureCount} partidos en ${matchdayCount} jornadas`}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Actions bar */}
@@ -281,6 +401,16 @@ export function AdminPanel() {
         destructive
         onConfirm={handleClear}
         onCancel={() => setConfirmClear(false)}
+      />
+
+      <ConfirmationModal
+        open={confirmFixtures}
+        title="Generar calendario"
+        description={`Se crearán ${fixtureCount} partidos repartidos en ${matchdayCount} jornadas con los ${registered} equipos actuales${doubleRound ? ', ida y vuelta' : ''}. Si ya había un calendario, se borrará junto con todos sus resultados.`}
+        confirmLabel="Generar"
+        destructive
+        onConfirm={handleGenerateFixtures}
+        onCancel={() => setConfirmFixtures(false)}
       />
 
       <ConfirmationModal

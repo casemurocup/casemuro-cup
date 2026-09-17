@@ -58,15 +58,21 @@ export function NavBar({
         ]
       : []),
 
-    {
-      view: 'draw',
-      label: 'Sorteo',
-      icon: Dices,
-    },
+    // El sorteo lo ejecuta solo la organizacion: a un visitante le salia
+    // una pestana que unicamente le decia que ya lo haria la administracion.
+    ...(isAdmin
+      ? [
+          {
+            view: 'draw' as View,
+            label: 'Sorteo',
+            icon: Dices,
+          },
+        ]
+      : []),
 
     {
-      view: 'bracket',
-      label: 'Cuadro',
+      view: 'competitions',
+      label: 'Competiciones',
       icon: LayoutGrid,
     },
 

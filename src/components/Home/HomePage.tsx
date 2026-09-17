@@ -25,7 +25,7 @@ export function HomePage({ onNavigate, isAdmin }: HomePageProps) {
     ...(isAdmin
       ? [{ view: 'admin' as View, title: 'Administración', desc: 'Gestiona los equipos participantes', icon: Settings, accent: 'from-accent-500/15 to-accent-500/5 border-accent-500/25', glow: 'group-hover:shadow-accent-500/10' }]
       : []),
-    { view: 'bracket', title: 'Cuadro', desc: 'Consulta el cuadro de eliminatoria y los resultados', icon: LayoutGrid, accent: 'from-cream-500/10 to-cream-500/5 border-cream-500/20', glow: 'group-hover:shadow-cream-500/10' },
+    { view: 'competitions', title: 'Competiciones', desc: 'Consulta el cuadro, la clasificación y los resultados', icon: LayoutGrid, accent: 'from-cream-500/10 to-cream-500/5 border-cream-500/20', glow: 'group-hover:shadow-cream-500/10' },
     { view: 'rules', title: 'Normas', desc: 'Revisa las reglas oficiales del torneo', icon: ScrollText, accent: 'from-amber-500/10 to-amber-500/5 border-amber-500/20', glow: 'group-hover:shadow-amber-500/10' },
     { view: 'captain', title: 'Capitán', desc: 'Accede al panel de capitán para gestionar partidos', icon: UserCog, accent: 'from-sky-500/10 to-sky-500/5 border-sky-500/20', glow: 'group-hover:shadow-sky-500/10' },
   ];
@@ -77,7 +77,7 @@ export function HomePage({ onNavigate, isAdmin }: HomePageProps) {
                 Administración
               </BroadcastButton>
             )}
-            <BroadcastButton variant="primary" size="lg" icon={<LayoutGrid className="h-5 w-5" />} onClick={() => onNavigate('bracket')}>
+            <BroadcastButton variant="primary" size="lg" icon={<LayoutGrid className="h-5 w-5" />} onClick={() => onNavigate('competitions')}>
               Ver Cuadro
             </BroadcastButton>
             <BroadcastButton variant="secondary" size="lg" icon={<ScrollText className="h-5 w-5" />} onClick={() => onNavigate('rules')}>
