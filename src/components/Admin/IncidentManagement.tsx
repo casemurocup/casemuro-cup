@@ -5,6 +5,7 @@ import {
   Check,
   ClipboardList,
   ExternalLink,
+  Trophy,
   X,
 } from 'lucide-react';
 
@@ -146,6 +147,31 @@ export function IncidentManagement() {
     load();
   };
 
+  /**
+   * Valida el resultado y, de paso, coloca al ganador en el cuadro.
+   */
+  const confirmAndAdvance = async (
+    resultId: string,
+    winnerTeamId: string,
+  ) => {
+    setBusyId(resultId);
+
+    const { error } = await supabase.rpc('confirm_match_result', {
+      p_result_id: resultId,
+      p_winner_team_id: winnerTeamId,
+    });
+
+    setBusyId(null);
+
+    if (error) {
+      showToast(error.message || 'No se pudo validar el resultado', 'error');
+      return;
+    }
+
+    showToast(`${teamName(winnerTeamId)} clasificado en el cuadro`);
+    load();
+  };
+
   const visibleIncidents = incidents.filter((i) => i.status === filter);
   const pendingResults = results.filter((r) => r.status === 'pending_review');
   const openCount = incidents.filter((i) => i.status === 'open').length;
@@ -177,8 +203,8 @@ export function IncidentManagement() {
         </div>
 
         <p className="text-sm text-slate-500">
-          Validar un resultado lo deja registrado como confirmado. Quién pasa de
-          ronda se sigue decidiendo desde el cuadro.
+          Elige quién ha ganado: el resultado queda confirmado y el equipo se
+          coloca solo en la siguiente ronda del cuadro.
         </p>
 
         {pendingResults.length === 0 ? (
@@ -210,23 +236,13 @@ export function IncidentManagement() {
                     </p>
                   </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => reviewResult(result.id, 'confirmed')}
-                      disabled={busyId === result.id}
-                      className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
-                    >
-                      <Check className="h-4 w-4" /> Confirmar
-                    </button>
-
-                    <button
-                      onClick={() => reviewResult(result.id, 'rejected')}
-                      disabled={busyId === result.id}
-                      className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-red-300 transition hover:bg-red-500/20 disabled:opacity-40"
-                    >
-                      <X className="h-4 w-4" /> Rechazar
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => reviewResult(result.id, 'rejected')}
+                    disabled={busyId === result.id}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-red-300 transition hover:bg-red-500/20 disabled:opacity-40"
+                  >
+                    <X className="h-4 w-4" /> Rechazar
+                  </button>
                 </div>
 
                 {(result.had_extra_time || result.had_penalties) && (
@@ -266,6 +282,74 @@ export function IncidentManagement() {
                     <ExternalLink className="h-3.5 w-3.5" /> Ver prueba
                   </a>
                 )}
+
+                {/* QUIÉN GANA Y PASA DE RONDA */}
+                <div className="mt-4 border-t border-slate-800 pt-4">
+                  {match?.winner_id ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-slate-400">
+                        Este partido ya está clasificado:{' '}
+                        <span className="font-bold text-emerald-300">
+                          {teamName(match.winner_id)}
+                        </span>
+                        . Para cambiarlo, deshazlo antes desde el cuadro.
+                      </p>
+
+                      <button
+                        onClick={() => reviewResult(result.id, 'confirmed')}
+                        disabled={busyId === result.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
+                      >
+                        <Check className="h-4 w-4" /> Confirmar resultado
+                      </button>
+                    </div>
+                  ) : !match?.team1_id || !match?.team2_id ? (
+                    <p className="text-sm text-slate-500">
+                      El partido todavía no tiene los dos equipos asignados.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Validar y clasificar en el cuadro
+                      </p>
+
+                      <div className="flex flex-wrap gap-2">
+                        {[match.team1_id, match.team2_id].map((teamId) => {
+                          const reported =
+                            result.winner_team_id === teamId;
+
+                          return (
+                            <button
+                              key={teamId}
+                              onClick={() =>
+                                confirmAndAdvance(result.id, teamId as string)
+                              }
+                              disabled={busyId === result.id}
+                              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold uppercase tracking-wide transition disabled:opacity-40 ${
+                                reported
+                                  ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                                  : 'border-slate-700 text-slate-400 hover:border-emerald-500/30 hover:text-emerald-300'
+                              }`}
+                            >
+                              <Trophy className="h-4 w-4" />
+                              Gana {teamName(teamId)}
+                              {reported && (
+                                <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px]">
+                                  reportado
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <p className="mt-2 text-xs text-slate-500">
+                        Al elegir ganador, el resultado queda confirmado y el
+                        equipo pasa automáticamente a la siguiente ronda.
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
             );
           })
