@@ -335,7 +335,13 @@ export function IncidentManagement() {
 
                 {/* VALIDACIÓN DEL RESULTADO */}
                 <div className="mt-4 border-t border-slate-800 pt-4">
-                  {isLeague ? (
+                  {!match ? (
+                    <p className="text-sm text-slate-500">
+                      El partido de esta incidencia ya no existe: seguramente se
+                      reinició el torneo o se volvió a generar el calendario.
+                      Puedes descartarla.
+                    </p>
+                  ) : isLeague ? (
                     !match?.team1_id || !match?.team2_id ? (
                       <p className="text-sm text-slate-500">
                         El partido todavía no tiene los dos equipos asignados.
